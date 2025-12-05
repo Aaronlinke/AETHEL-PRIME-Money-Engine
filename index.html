@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>AETHEL·PRIME Live Dashboard</title>
+    <style>
+        body { 
+            font-family: 'Courier New', monospace; 
+            background: #1e1e1e; 
+            color: #00ff00; 
+            padding: 20px; 
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h2 {
+            color: #00cc00;
+            border-bottom: 2px solid #00cc00;
+            padding-bottom: 10px;
+        }
+        #logs { 
+            height: 40vh; 
+            overflow-y: scroll; 
+            border: 1px solid #00ff00; 
+            padding: 10px; 
+            background: #000000;
+            margin-bottom: 20px;
+        }
+        #wallet-status {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .wallet-card {
+            background: #333;
+            padding: 15px;
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            min-width: 200px;
+        }
+        .wallet-card h3 {
+            margin-top: 0;
+            color: #00ff00;
+        }
+        .wallet-card p {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #ffcc00;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px dotted #004400;
+            padding-bottom: 3px;
+        }
+        .log-claim { color: #00ff00; }
+        .log-trade { color: #ffcc00; }
+        .log-nft { color: #00ffff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>AETHEL·PRIME Live Dashboard</h2>
+        
+        <h3>Wallet Status</h3>
+        <div id="wallet-status">
+            <!-- Wallet-Karten werden hier eingefügt -->
+        </div>
+
+        <h3>System Logs</h3>
+        <div id="logs">
+            <!-- Logs werden hier eingefügt -->
+        </div>
+    </div>
+
+    <script>
+        // Der WebSocket-Port ist 8765, der Host wird beim Expose-Schritt bekannt gegeben.
+        // Für den lokalen Test verwenden wir localhost:8765.
+        // Der Host wird später durch die exposed URL ersetzt.
+        const ws_url = 'wss://8765-iwyc7zxxqugkq31xrqbt6-a977c35d.manusvm.computer'; 
+        const ws = new WebSocket(ws_url);
+        const logs = document.getElementById('logs');
+        const walletStatus = document.getElementById('wallet-status');
+        const walletBalances = {}; // Speichert den aktuellen Wallet-Status
+
+        function updateWalletDisplay() {
+            walletStatus.innerHTML = ''; // Leere den Container
+            for (const token in walletBalances) {
+                const card = document.createElement('div');
+                card.className = 'wallet-card';
+                card.innerHTML = \`<h3>\${token}</h3><p>\${parseFloat(walletBalances[token]).toFixed(8)}</p>\`;
+                walletStatus.appendChild(card);
+            }
+        }
+
+        ws.onopen = () => {
+            console.log('WebSocket verbunden');
+            addLog('Verbindung zum AETHEL·PRIME Engine hergestellt.', 'log-claim');
+        };
+
+        ws.onmessage = (event) => {
+            const data = event.data;
+            
+            try {
+                const json_data = JSON.parse(data);
+                
+                if (json_data.type === 'INIT_WALLET') {
+                    // Initialer Wallet-Status
+                    for (const token in json_data.balances) {
+                        walletBalances[token] = json_data.balances[token];
+                    }
+                    updateWalletDisplay();
+                    addLog('Initialer Wallet-Status geladen.', 'log-claim');
+                    return;
+                }
+                
+                // Hier könnten wir komplexere JSON-Objekte verarbeiten, 
+                // aber der Python-Orchestrator sendet auch einfache Text-Logs.
+                
+            } catch (e) {
+                // Verarbeite einfache Text-Logs
+                addLog(data);
+                
+                // Aktualisiere den Wallet-Status basierend auf Text-Logs (weniger robust, aber funktioniert)
+                if (data.startsWith('CLAIM:')) {
+                    const parts = data.split(' ');
+                    const token = parts[3];
+                    const newBalance = parts[5];
+                    walletBalances[token] = newBalance;
+                    updateWalletDisplay();
+                }
+            }
+        };
+
+        ws.onclose = () => {
+            addLog('Verbindung getrennt. Versuche Neuverbindung...', 'log-trade');
+        };
+
+        ws.onerror = (error) => {
+            addLog(\`WebSocket Fehler: \${error}\`, 'log-nft');
+        };
+
+        function addLog(message, className = 'log-entry') {
+            const p = document.createElement('p');
+            p.className = className;
+            p.textContent = \`[\${new Date().toLocaleTimeString()}] \${message}\`;
+            logs.appendChild(p);
+            logs.scrollTop = logs.scrollHeight;
+        }
+    </script>
+</body>
+</html>
